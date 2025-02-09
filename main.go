@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/machinebox/graphql"
 	"github.com/robfig/cron/v3"
 	"github.com/rohankarn35/nepsemarketbot/cmd"
 
@@ -15,74 +17,68 @@ import (
 
 func main() {
 
-	// Load environment variables
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		log.Fatal("DATABASE_URL environment variable not set")
-	}
-
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN environment variable not set")
-	}
-	// Connect to PostgreSQL
-	db := cmd.InitializeDb(dsn)
-
-	defer db.Close()
-
-	ipoAPIURL := os.Getenv("IPO_API_URL")
-	if ipoAPIURL == "" {
-		log.Fatal("IPO_API_URL environment variable not set")
-	}
-
-	fpoAPIURL := os.Getenv("FPO_API_URL")
-	if fpoAPIURL == "" {
-		log.Fatal("FPO_API_URL environment variable not set")
-	}
-
-	c := cron.New(cron.WithLocation(time.FixedZone("NPT", 5*3600+45*60)))
-	chatIDStr := os.Getenv("CHAT_ID")
-	if chatIDStr == "" {
-		log.Fatal("TELEGRAM_CHAT_ID environment variable not set")
-	}
-
-	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-	if err != nil {
-		log.Fatalf("Error converting TELEGRAM_CHAT_ID to int64: %v", err)
-	}
-
-	//initializebot
-	bot := cmd.InitializeDataBase(botToken)
-
-	server.InitializeScheduleronRestart(bot, c, db, chatID)
-
-	// Add initial message to show bot is running
-	log.Println("Bot started and waiting for messages...")
-	err = cmd.SendMessages(db, c, ipoAPIURL, bot, fpoAPIURL, chatID)
-	if err != nil {
-		log.Printf("Error sending messages: %v", err)
-	}
-
-	// Periodic message sender
-
-	ticker := time.NewTicker(1 * time.Hour)
-	go func() {
-		for range ticker.C {
-			err := cmd.SendMessages(db, c, ipoAPIURL, bot, fpoAPIURL, chatID)
-			if err != nil {
-				log.Printf("Error sending messages: %v", err)
-				continue
-			}
-
+	// Load environment variables from .env file
+	attempts := 3
+	for attempts > 0 {
+		err := godotenv.Load()
+		if err != nil {
+			log.Printf("Error loading .env file: %v", err)
+			attempts--
+			continue
 		}
-	}()
-	c.Start()
+		dsn := os.Getenv("DATABASE_URL")
+		botToken := os.Getenv("TEST_BOT_TOKEN")
+		chatIDStr := os.Getenv("TEST_CHAT_ID")
+		api_url := os.Getenv("GRAPHQL_API")
 
-	// Keep the program running
-	select {}
+		// Connect to PostgreSQL
+		db := cmd.InitializeDb(dsn)
+		if db == nil {
+			log.Printf("Error initializing database")
+			attempts--
+			continue
+		}
+
+		// Connect to local GraphQL server
+		client := graphql.NewClient(api_url)
+		if client == nil {
+			log.Printf("Error initializing GraphQL client")
+			attempts--
+			continue
+		}
+		fmt.Print(client)
+
+		defer db.Close()
+
+		c := cron.New(cron.WithLocation(time.FixedZone("NPT", 5*3600+45*60)))
+
+		chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+		if err != nil {
+			log.Printf("Error converting TELEGRAM_CHAT_ID to int64: %v", err)
+			attempts--
+			continue
+		}
+
+		//initializebot
+		bot := cmd.InitializeDataBase(botToken)
+		if bot == nil {
+			log.Printf("Error initializing bot")
+			attempts--
+			continue
+		}
+
+		server.InitializeScheduleronRestart(bot, c, db, chatID)
+
+		server.ScheduleMarketSummary(bot, c, chatID, client)
+
+		// Add initial message to show bot is running
+		log.Println("Bot started and waiting for messages...")
+		cmd.ScheduleSendMessage(db, c, bot, chatID, client)
+
+		c.Start()
+
+		// Keep the program running
+		select {}
+	}
+	log.Fatalf("Failed to start the bot after 3 attempts")
 }

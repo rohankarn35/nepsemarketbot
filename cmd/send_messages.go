@@ -6,31 +6,27 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/machinebox/graphql"
 	"github.com/robfig/cron/v3"
+	"github.com/rohankarn35/htmlcapture"
 	ipodb "github.com/rohankarn35/nepsemarketbot/db"
+	dbgraphql "github.com/rohankarn35/nepsemarketbot/graphql"
 	"github.com/rohankarn35/nepsemarketbot/models"
 	"github.com/rohankarn35/nepsemarketbot/server"
 	"github.com/rohankarn35/nepsemarketbot/services"
 )
 
-func SendMessages(db *pgxpool.Pool, c *cron.Cron, ipoAPIURL string, bot *tgbotapi.BotAPI, fpoAPIURL string, chatID int64) error {
+func SendMessages(db *pgxpool.Pool, c *cron.Cron, bot *tgbotapi.BotAPI, chatID int64, client *graphql.Client) error {
 
 	// Fetch latest data
-	ipoData, err := server.FetchIPOData(ipoAPIURL)
+	ipoData, fpoData, err := dbgraphql.GetIPOFPODetails(client)
 	if err != nil {
 		return err
-
 	}
-	log.Printf("Fetched IPO data successfully")
+	log.Printf("Fetched IPO and FPO data successfully")
 
-	fpoData, err := server.FetchFPOData(fpoAPIURL)
-	if err != nil {
-		return err
-
-	}
-	log.Printf("Fetched FPO data successfully")
 	var IPOdata []models.IPOAlertModel
-	for _, ipo := range ipoData.Result.Data {
+	for _, ipo := range ipoData {
 		IPOdata = append(IPOdata, models.IPOAlertModel{
 			CompanyName:            ipo.CompanyName,
 			StockSymbol:            ipo.StockSymbol,
@@ -51,7 +47,7 @@ func SendMessages(db *pgxpool.Pool, c *cron.Cron, ipoAPIURL string, bot *tgbotap
 		})
 	}
 
-	for _, fpo := range fpoData.Result.Data {
+	for _, fpo := range fpoData {
 		IPOdata = append(IPOdata, models.IPOAlertModel{
 			CompanyName:            fpo.CompanyName,
 			StockSymbol:            fpo.StockSymbol,
@@ -76,6 +72,7 @@ func SendMessages(db *pgxpool.Pool, c *cron.Cron, ipoAPIURL string, bot *tgbotap
 	for _, ipo := range IPOdata {
 		if strings.ToLower(ipo.Status) == "nearing" || strings.ToLower(ipo.Status) == "open" {
 			isAvailable := ipodb.CheckAndUpdateIPOStatus(db, ipo.StockSymbol, ipo.Status)
+			log.Print(isAvailable)
 			if isAvailable {
 
 				ipodb.CreateOrUpdateDB(db, ipo.CompanyName, ipo.StockSymbol, ipo.ShareType, ipo.SectorName, ipo.Status, ipo.PricePerUnit, ipo.MinUnits, ipo.MaxUnits, ipo.OpeningDateAD, ipo.OpeningDateBS, ipo.ClosingDateAD, ipo.ClosingDateBS, ipo.ClosingDateClosingTime, ipo.ShareRegistrar, ipo.Rating, ipo.Type)
@@ -86,27 +83,62 @@ func SendMessages(db *pgxpool.Pool, c *cron.Cron, ipoAPIURL string, bot *tgbotap
 					Symbol:      ipo.StockSymbol,
 				}
 				ipodb.StoreCron(db, ipoCronData)
+				ipoType := ipo.ShareType
+				if ipo.ShareType == "ordinary" {
+					ipoType = "General Public"
+				}
+				status := "Upcoming"
+				if ipo.Status != "Nearing" {
+					status = ipo.Status
+				}
+				openingDate := services.ConvertDate(ipo.OpeningDateAD, ipo.OpeningDateBS)
+				closingDate := services.ConvertDate(ipo.ClosingDateAD, ipo.ClosingDateBS)
+				opts := htmlcapture.CaptureOptions{
+					Input: "templates/ipoAlert.html",
+					Variables: map[string]string{
+						"CompanyName": ipo.CompanyName,
+						"Title":       status + " " + ipo.Type + " Alert",
+						"Subtitle":    "(" + "For " + ipoType + ")",
 
+						"IssueDate":   openingDate,
+						"ClosingDate": closingDate,
+						"IssuePrice":  "Rs. " + ipo.PricePerUnit,
+						"Sector":      ipo.SectorName,
+					},
+					Selector:  ".container",
+					ViewportW: 700,
+					ViewportH: 600,
+				}
+				img, err := htmlcapture.Capture(opts)
+				if err != nil {
+					log.Fatalf("Error capturing screenshot: %v", err)
+				}
+
+				// Prepare the message text
 				responseText := services.FormatIPOMessage(ipo)
-				msg := tgbotapi.NewMessage(chatID, responseText)
+
+				// Send the photo
+				photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: "ipoimage", Bytes: img})
+				photo.Caption = responseText
+				photo.ParseMode = "Markdown"
+
+				// If IPO is open, add a button
 				if strings.ToLower(ipo.Status) == "open" {
 					button1 := tgbotapi.NewInlineKeyboardButtonURL("APPLY HERE", "https://meroshare.cdsc.com.np/")
 					inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup(
 						tgbotapi.NewInlineKeyboardRow(button1),
 					)
-					msg.ReplyMarkup = inlineKeyboard
+					photo.ReplyMarkup = inlineKeyboard
 				}
 
-				msg.ParseMode = "Markdown"
+				// Send the photo with caption and button
+				if _, err := bot.Send(photo); err != nil {
 
-				log.Printf("Attempting to send IPO message to chat ID: %d", chatID)
-
-				// Actually send the message
-				if _, err := bot.Send(msg); err != nil {
-					log.Printf("Error sending IPO message: %v", err)
+					log.Printf("Error sending IPO image: %v", err)
 					continue
 				}
-				log.Printf("Successfully sent IPO message to chat ID: %d", chatID)
+
+				log.Printf("Successfully sent IPO image to chat ID: %d", chatID)
 			} else {
 				log.Printf("Message Already Sent: %d", chatID)
 			}
@@ -115,4 +147,26 @@ func SendMessages(db *pgxpool.Pool, c *cron.Cron, ipoAPIURL string, bot *tgbotap
 		}
 	}
 	return nil
+}
+
+func ScheduleSendMessage(db *pgxpool.Pool, c *cron.Cron, bot *tgbotapi.BotAPI, chatID int64, client *graphql.Client) {
+
+	if err := SendMessages(db, c, bot, chatID, client); err != nil {
+		log.Printf("Error sending messages: %v", err)
+		if err := SendMessages(db, c, bot, chatID, client); err != nil {
+			log.Printf("Error sending messages on retry: %v", err)
+		}
+	}
+
+	_, err := c.AddFunc("0 9-17 * * *", func() {
+		if err := SendMessages(db, c, bot, chatID, client); err != nil {
+			log.Printf("Error sending messages: %v", err)
+			if err := SendMessages(db, c, bot, chatID, client); err != nil {
+				log.Printf("Error sending messages on retry: %v", err)
+			}
+		}
+	})
+	if err != nil {
+		log.Fatalf("Error scheduling send messages: %v", err)
+	}
 }

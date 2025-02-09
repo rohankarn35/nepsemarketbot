@@ -20,6 +20,7 @@ func CheckAndUpdateIPOStatus(db *pgxpool.Pool, symbol string, status string) boo
 		}
 		log.Fatalf("Error querying IPO status: %v\n", err)
 	}
+	log.Printf("Existing Status: %s, New Status: %s, IPO Name: %s\n", existingStatus, status, symbol)
 
 	if existingStatus == status {
 		return false

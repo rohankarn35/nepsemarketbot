@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -24,7 +25,7 @@ type CompanyIssue struct {
 
 func fetchDataFromAPI() (string, error) {
 	// Replace with your actual API endpoint
-	apiURL := "https://cdsc.com.np/ipolist"
+	apiURL := os.Getenv("API_URL")
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
