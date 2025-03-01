@@ -1,6 +1,7 @@
 package models
 
 type IPODB struct {
+	UniqueSymbol           string
 	CompanyName            string
 	StockSymbol            string
 	ShareType              string

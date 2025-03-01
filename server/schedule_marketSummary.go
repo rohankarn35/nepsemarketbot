@@ -15,11 +15,8 @@ import (
 
 func ScheduleMarketSummary(bot *tgbotapi.BotAPI, c *cron.Cron, chatID int64, client *graphql.Client) {
 
-	_, err := c.AddFunc("5 15 * * *", func() {
-		msg := tgbotapi.NewMessage(chatID, "Market summary at 3:05 PM")
-		if _, err := bot.Send(msg); err != nil {
-			log.Printf("Error sending scheduled message: %v", err)
-		}
+	_, err := c.AddFunc("0 15 * * *", func() {
+		SendMarketSummaryMessage(bot, chatID, client)
 	})
 	if err != nil {
 		log.Printf("Error scheduling market summary: %v", err)

@@ -14,6 +14,7 @@ require (
 require (
 	github.com/matryer/is v1.4.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/steebchen/prisma-client-go v0.47.0 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 )
 

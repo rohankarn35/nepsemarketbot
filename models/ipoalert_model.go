@@ -1,6 +1,7 @@
 package models
 
 type IPOAlertModel struct {
+	UniqueSymbol           string
 	CompanyName            string
 	StockSymbol            string
 	ShareType              string
