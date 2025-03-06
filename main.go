@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/machinebox/graphql"
 	"github.com/robfig/cron/v3"
 	"github.com/rohankarn35/nepsemarketbot/cmd"
-
-	"github.com/rohankarn35/nepsemarketbot/server"
+	ipodb "github.com/rohankarn35/nepsemarketbot/db"
 )
 
 func main() {
@@ -28,7 +26,7 @@ func main() {
 		}
 		dsn := os.Getenv("DATABASE_URL")
 		botToken := os.Getenv("TEST_BOT_TOKEN")
-		chatIDStr := os.Getenv("TEST_CHAT_ID")
+		// chatIDStr := os.Getenv("TEST_CHAT_ID")
 		api_url := os.Getenv("GRAPHQL_API")
 
 		// Connect to PostgreSQL
@@ -47,17 +45,15 @@ func main() {
 			continue
 		}
 		fmt.Print(client)
-
-		defer db.Close()
-
+		ipodb.ReadCron(db)
 		c := cron.New(cron.WithLocation(time.FixedZone("NPT", 5*3600+45*60)))
 
-		chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-		if err != nil {
-			log.Printf("Error converting TELEGRAM_CHAT_ID to int64: %v", err)
-			attempts--
-			continue
-		}
+		// chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+		// if err != nil {
+		// 	log.Printf("Error converting TELEGRAM_CHAT_ID to int64: %v", err)
+		// 	attempts--
+		// 	continue
+		// }
 
 		//initializebot
 		bot := cmd.InitializeDataBase(botToken)
@@ -67,13 +63,13 @@ func main() {
 			continue
 		}
 
-		server.InitializeScheduleronRestart(bot, c, db, chatID)
+		// server.InitializeScheduleronRestart(bot, c, db, chatID)
 
-		server.ScheduleMarketSummary(bot, c, chatID, client)
+		// server.ScheduleMarketSummary(bot, c, chatID, client)
 
 		// Add initial message to show bot is running
 		log.Println("Bot started and waiting for messages...")
-		cmd.ScheduleSendMessage(db, c, bot, chatID, client)
+		// cmd.ScheduleSendMessage(db, c, bot, chatID, client)
 
 		c.Start()
 

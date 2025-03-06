@@ -7,10 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func CheckAndUpdateIPOStatus(db *pgxpool.Pool, symbol string, status string) bool {
+func CheckAndUpdateIPOStatus(db *pgxpool.Pool, uniqueSymbol string, status string) bool {
 	var existingStatus string
-	query := `SELECT IPOStatus FROM nepsedata WHERE StockSymbol = $1`
-	err := db.QueryRow(context.Background(), query, symbol).Scan(&existingStatus)
+	query := `SELECT IPOStatus FROM NepseData WHERE UniqueSymbol = $1`
+	err := db.QueryRow(context.Background(), query, uniqueSymbol).Scan(&existingStatus)
 
 	if err != nil {
 		// If no rows are returned, insert the new IPO
@@ -20,11 +20,7 @@ func CheckAndUpdateIPOStatus(db *pgxpool.Pool, symbol string, status string) boo
 		}
 		log.Fatalf("Error querying IPO status: %v\n", err)
 	}
-	log.Printf("Existing Status: %s, New Status: %s, IPO Name: %s\n", existingStatus, status, symbol)
+	log.Printf("Existing Status: %s, New Status: %s, IPO Name: %s\n", existingStatus, status, uniqueSymbol)
 
-	if existingStatus == status {
-		return false
-	}
-
-	return true
+	return existingStatus != status
 }

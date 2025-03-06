@@ -4,18 +4,19 @@ type IPOAlertModel struct {
 	UniqueSymbol           string
 	CompanyName            string
 	StockSymbol            string
-	ShareType              string
+	ShareRegistrar         string
 	SectorName             string
-	Status                 string
+	ShareType              string
 	PricePerUnit           string
+	Rating                 string
+	Units                  string
 	MinUnits               string
 	MaxUnits               string
+	TotalAmount            string
 	OpeningDateAD          string
 	OpeningDateBS          string
 	ClosingDateAD          string
 	ClosingDateBS          string
 	ClosingDateClosingTime string
-	ShareRegistrar         string
-	Rating                 string
-	Type                   string
+	Status                 string
 }

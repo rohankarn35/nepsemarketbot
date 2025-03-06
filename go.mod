@@ -9,12 +9,14 @@ require (
 	github.com/opensource-nepal/go-nepali v0.3.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/net v0.34.0
+	gorm.io/driver/postgres v1.5.11
 )
 
 require (
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/matryer/is v1.4.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/steebchen/prisma-client-go v0.47.0 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 )
 
@@ -36,4 +38,5 @@ require (
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
+	gorm.io/gorm v1.25.12
 )

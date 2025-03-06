@@ -1,78 +1,29 @@
 package ipodb
 
 import (
-	"context"
 	"fmt"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rohankarn35/nepsemarketbot/models"
+	gorm_model "github.com/rohankarn35/nepsemarketbot/db/models"
+
+	"gorm.io/gorm"
 )
 
-func StoreCron(db *pgxpool.Pool, cron models.CronJobModel) error {
-	query := `
-		INSERT INTO cron_jobs (Closingdate, Closingtime, StockSymbol)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (StockSymbol) DO NOTHING
-		RETURNING JobID;
-	`
-	var jobID int
-	ctx := context.Background()
-	err := db.QueryRow(ctx, query, cron.Closingdate, cron.Closingtime, cron.Symbol).Scan(&jobID)
-	if err != nil {
-		return fmt.Errorf("failed to insert cron job: %w", err)
-	}
+func StoreCron(db *gorm.DB, cron gorm_model.CronJob) error {
 
-	log.Printf("Cron job inserted successfully with JobID: %d", jobID)
+	if err := db.Create(&cron).Error; err != nil {
+		return fmt.Errorf("failed to store cron job %v", err)
+	}
 	return nil
 
 }
 
-func ReadCron(db *pgxpool.Pool) ([]models.CronJobIpoModel, error) {
-	query := `
-		SELECT cj.Closingdate, cj.Closingtime, cj.StockSymbol, nd.*
-		FROM cron_jobs cj
-		JOIN nepsedata nd ON cj.StockSymbol = nd.StockSymbol;
-	`
-	rows, err := db.Query(context.Background(), query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cron jobs: %w", err)
-	}
-	defer rows.Close()
+func ReadCron(db *gorm.DB) ([]gorm_model.CronJob, error) {
+	var cron []gorm_model.CronJob
 
-	var cronJobs []models.CronJobIpoModel
-	for rows.Next() {
-		var cronJob models.CronJobIpoModel
-		err := rows.Scan(
-			&cronJob.Closingdate,
-			&cronJob.Closingtime,
-			&cronJob.Symbol,
-			&cronJob.CompanyName,
-			&cronJob.StockSymbol,
-			&cronJob.ShareType,
-			&cronJob.SectorName,
-			&cronJob.Status,
-			&cronJob.PricePerUnit,
-			&cronJob.MinUnits,
-			&cronJob.MaxUnits,
-			&cronJob.OpeningDateAD,
-			&cronJob.OpeningDateBS,
-			&cronJob.ClosingDateAD,
-			&cronJob.ClosingDateBS,
-			&cronJob.ClosingDateClosingTime,
-			&cronJob.ShareRegistrar,
-			&cronJob.Rating,
-			&cronJob.Type,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan cron job: %w", err)
-		}
-		cronJobs = append(cronJobs, cronJob)
+	if err := db.Preload("nepse_data").Find(&cron).Error; err != nil {
+		return nil, fmt.Errorf("failed to load data")
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return cronJobs, nil
+	log.Print("read all the documents", cron)
+	return cron, nil
 }
